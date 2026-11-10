@@ -47,8 +47,9 @@ export default function App() {
   }, [])
 
   const solve = useCallback(
-    (text) => {
+    (text, options = {}) => {
       const next = buildSession(text)
+      if (options.sourceImage) next.sourceImage = options.sourceImage
       emit('stop-narration')
       setSession(next)
       setTabRaw('voice')

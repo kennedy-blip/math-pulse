@@ -1,10 +1,25 @@
-import { useMemo, useState } from 'react'
-import { ArrowRight, CornerDownLeft, Eraser, Mic, MicOff, ScanSearch, Sparkles, Wand2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import {
+  ArrowRight,
+  Camera,
+  CornerDownLeft,
+  Eraser,
+  ImagePlus,
+  Loader2,
+  Mic,
+  MicOff,
+  MonitorUp,
+  ScanSearch,
+  Sparkles,
+  Wand2,
+} from 'lucide-react'
 import { SAMPLE_PROMPTS } from '../data/problems.js'
 import { classifyTopic } from '../lib/classify.js'
 import { useVoiceInput } from '../hooks/useVoiceInput.js'
 import { useApp } from '../lib/appContext.jsx'
 import { Badge, Button, Formula, accent } from './ui.jsx'
+import ImageImportDialog from './ImageImportDialog.jsx'
+import { captureScreenFrame, loadImageFromDataUrl, loadImageFromFile } from '../lib/ocr.js'
 
 const EXAMPLES = [
   'Find the derivative of f(x) = 3x² + 2x at x = 1',
@@ -17,8 +32,14 @@ export default function ProblemComposer({ hero = false, onSolved }) {
   const { solve, session } = useApp()
   const [text, setText] = useState('')
   const [focused, setFocused] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [seedImage, setSeedImage] = useState(null)
+  const [seedError, setSeedError] = useState('')
+  const [capturing, setCapturing] = useState(false)
+  const dragDepth = useRef(0)
 
-  const live = useMemo(() => classifyTopic(text), [text])
+  const live = classifyTopic(text)
   const meta = live.disciplineMeta
   const a = accent(meta?.accent || 'violet')
 
@@ -33,14 +54,85 @@ export default function ProblemComposer({ hero = false, onSolved }) {
     setText('')
   }
 
+  const openImport = (image = null, message = '') => {
+    setSeedImage(image)
+    setSeedError(message)
+    setImportOpen(true)
+  }
+
+  const handleImportedText = (value, sourceImage) => {
+    setImportOpen(false)
+    setSeedImage(null)
+    solve(value, { sourceImage })
+    onSolved?.()
+    setText('')
+  }
+
+  const takeScreenshot = async () => {
+    setCapturing(true)
+    try {
+      const dataUrl = await captureScreenFrame()
+      const meta = await loadImageFromDataUrl(dataUrl, 'screenshot.png')
+      openImport(meta)
+    } catch (err) {
+      openImport(null, err.message || 'Screen capture is unavailable here — paste a screenshot instead.')
+    } finally {
+      setCapturing(false)
+    }
+  }
+
+  const firstImage = (list) => [...(list || [])].find((f) => /^image\//.test(f.type))
+
   const showDetection = text.trim().length > 2
 
+  const ingest = (file) => {
+    if (!file) return
+    loadImageFromFile(file)
+      .then((meta) => openImport(meta))
+      .catch((err) => openImport(null, err.message || 'That image could not be opened.'))
+  }
+
   return (
+    <>
     <div
+      onDragEnter={(event) => {
+        if ([...(event.dataTransfer?.types || [])].includes('Files')) {
+          dragDepth.current += 1
+          setDragging(true)
+        }
+      }}
+      onDragOver={(event) => {
+        if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault()
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragging(false)
+      }}
+      onDrop={(event) => {
+        const file = firstImage(event.dataTransfer?.files)
+        dragDepth.current = 0
+        setDragging(false)
+        if (!file) return
+        event.preventDefault()
+        ingest(file)
+      }}
+      onPaste={(event) => {
+        const file = firstImage(event.clipboardData?.files)
+        if (!file) return
+        event.preventDefault()
+        ingest(file)
+      }}
       className={`relative overflow-hidden rounded-2xl border bg-panel/60 backdrop-blur-xl transition-all duration-300 ${
         focused ? 'border-violet/40 shadow-[0_0_60px_-24px_rgba(139,92,246,.9)]' : 'border-white/[0.08]'
-      }`}
+      } ${dragging ? 'ring-2 ring-cyan/60' : ''}`}
     >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-cyan/60 bg-obsidian/85 text-center">
+          <ImagePlus size={26} className="text-cyan" />
+          <p className="text-[13px] font-semibold text-white">Drop the image to import a question</p>
+          <p className="text-[11px] text-slate-400">You will crop it to the exact question next</p>
+        </div>
+      )}
       <div className={`pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${a.grad} opacity-60`} />
       <div className={`relative ${hero ? 'p-5 sm:p-7' : 'p-4'}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -112,6 +204,22 @@ export default function ProblemComposer({ hero = false, onSolved }) {
         {error && <p className="mt-2 text-[11px] text-rose">{error}</p>}
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => openImport()}
+            className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-cyan/25 bg-cyan/[0.08] px-2.5 py-1 text-[10.5px] font-semibold text-cyan transition hover:border-cyan/45 hover:bg-cyan/15"
+          >
+            <ImagePlus size={12} /> Import image
+          </button>
+          <button
+            type="button"
+            onClick={takeScreenshot}
+            disabled={capturing}
+            className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10.5px] font-semibold text-slate-300 transition hover:border-cyan/35 hover:text-white disabled:opacity-60"
+          >
+            {capturing ? <Loader2 size={12} className="animate-spin" /> : <MonitorUp size={12} />}
+            {capturing ? 'Capturing…' : 'Screenshot'}
+          </button>
           <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Try</span>
           {(hero ? SAMPLE_PROMPTS : SAMPLE_PROMPTS.slice(0, 4)).map((s) => (
             <button
@@ -167,6 +275,18 @@ export default function ProblemComposer({ hero = false, onSolved }) {
         </div>
 
         {hero && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-600">
+            <span className="flex items-center gap-1.5">
+              <Camera size={11} /> photo a worksheet, or drop / paste a screenshot
+            </span>
+            <span className="hidden sm:inline">·</span>
+            <span className="flex items-center gap-1.5">
+              <ScanSearch size={11} /> crop it and the question is read on-device
+            </span>
+          </div>
+        )}
+
+        {hero && (
           <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {EXAMPLES.map((e) => (
               <button
@@ -184,5 +304,17 @@ export default function ProblemComposer({ hero = false, onSolved }) {
         )}
       </div>
     </div>
+    <ImageImportDialog
+      open={importOpen}
+      initialImage={seedImage}
+      initialError={seedError}
+      onClose={() => {
+        setImportOpen(false)
+        setSeedImage(null)
+        setSeedError('')
+      }}
+      onSolve={handleImportedText}
+    />
+    </>
   )
 }
