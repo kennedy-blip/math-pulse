@@ -2,7 +2,7 @@
 
 **An advanced, voice-enabled math tutor with Socratic guidance, a digital handwriting studio, autonomous diagram synthesis, adaptive quizzes and spaced-repetition flashcards.**
 
-MathPulse is a single-page React application. Type or dictate any problem, and it classifies the discipline, builds a narrated step-by-step solution, draws the right interactive figure, writes the worked solution as digital ink, and turns the topic into practice questions and a flashcard deck.
+MathPulse is a single-page React application. Type, dictate **or photograph** any problem, and it classifies the discipline, builds a narrated step-by-step solution, draws the right interactive figure, writes the worked solution as digital ink, and turns the topic into practice questions and a flashcard deck.
 
 ---
 
@@ -16,6 +16,8 @@ npm run preview  # serve the production build
 ```
 
 No backend, no API keys. Every solution, diagram, quiz and flashcard is generated client-side.
+
+> The first `dev`/`build` run copies the OCR runtime (Tesseract worker, WASM core and the English model) from `node_modules` into `public/ocr/`. Those files are git-ignored and regenerated automatically by the `predev`/`prebuild` hooks.
 
 ---
 
@@ -33,6 +35,16 @@ No backend, no API keys. Every solution, diagram, quiz and flashcard is generate
 Header actions: **Toggle Voice**, **Export Handwritten PDF** (print dialog → *Save as PDF*), **New Session** (clears the workspace and opens a fresh composer).
 
 ---
+
+## Import a question from an image
+
+Every composer has **Import image** and **Screenshot** actions, plus drag-and-drop and clipboard paste (⌘/Ctrl + V) anywhere on the composer card.
+
+1. **Source** — upload, drag, paste, take a photo (`capture="environment"`) or capture the screen with `getDisplayMedia`.
+2. **Crop** — a draggable, resizable crop box with rule-of-thirds guides frames exactly the question you want read, so a page of exercises becomes one problem.
+3. **Check** — on-device OCR (Tesseract.js) extracts the text, a math cleanup pass repairs `x2 → x²`, stray dashes and question numbering, the topic detector shows the discipline and confidence, and you can fix any symbol before pressing **Solve & narrate**.
+
+The cropped image never leaves the browser, and the solved session keeps a thumbnail labelled *Question from image* so you can see what was read.
 
 ## How the tutor thinks
 
@@ -70,6 +82,8 @@ Unrecognised prompts fall back to the nearest discipline exemplar with an adapti
 - **Space** — flip the current flashcard
 - **1 / 2 / 3 / 4** — rate a revealed card (Again / Hard / Good / Easy)
 - **⌘/Ctrl + Enter** — solve the prompt in the composer
+- **⌘/Ctrl + V** — paste a screenshot into the image importer
+- **Esc** — close the image importer
 
 ## Design system
 
@@ -115,10 +129,12 @@ src/
     ui.jsx                Card, Button, Badge, Drawer, SectionHeader, toggles…
   lib/
     classify.js           topic detection + solution builder
+    ocr.js                on-device OCR, crop and screen-capture helpers
     generateQuiz.js       adaptive question generation
     appContext.jsx        app state, tabs, toasts
   hooks/                  narration + voice input
   data/                   authored problems and Socratic scripts
+scripts/copy-ocr-assets.mjs   copies Tesseract runtime into public/ocr at build time
 ```
 
 ---

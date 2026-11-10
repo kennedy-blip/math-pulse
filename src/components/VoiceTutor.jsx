@@ -316,6 +316,19 @@ export default function VoiceTutor() {
             <Formula tone={session.disciplineMeta?.accent || 'violet'} block className="mt-2 text-[12.5px] text-slate-300">
               {session.formula}
             </Formula>
+            {session.sourceImage && (
+              <div className="mt-3 flex max-w-md items-center gap-2.5 rounded-xl border border-cyan/25 bg-cyan/[0.06] p-1.5 pr-3">
+                <img
+                  src={session.sourceImage}
+                  alt="Cropped question imported from an image"
+                  className="h-10 w-14 shrink-0 rounded-lg border border-white/10 object-cover"
+                />
+                <div className="min-w-0">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-cyan">Question from image</p>
+                  <p className="truncate text-[11px] text-slate-400">Cropped &amp; read on-device with OCR</p>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:flex-col lg:items-stretch">
             <Button size="sm" variant="outline" icon={PencilLine} onClick={() => setShowComposer((s) => !s)}>
